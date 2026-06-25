@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Saudi Arabia: Data Centers vs. Water Stress</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: #0a0e17;
+    color: #e8e8e8;
+    overflow: hidden;
+    height: 100vh;
+  }
+
+  #header {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    padding: 20px 28px 16px;
+    background: linear-gradient(180deg, rgba(10,14,23,0.95) 0%, rgba(10,14,23,0.7) 80%, transparent 100%);
+    pointer-events: none;
+  }
+
+  #header h1 {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    color: #fff;
+    line-height: 1.2;
+  }
+
+  #header h1 span {
+    color: #ff6b4a;
+  }
+
+  #header p {
+    font-size: 12px;
+    font-weight: 400;
+    color: #8a94a6;
+    margin-top: 6px;
+    line-height: 1.5;
+    max-width: 520px;
+  }
+
+  #map {
+    width: 100%;
+    height: 100vh;
+  }
+
+  /* Legend */
+  .legend-panel {
+    position: absolute;
+    bottom: 24px;
+    left: 16px;
+    z-index: 1000;
+    background: rgba(10, 14, 23, 0.92);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 14px 16px;
+    min-width: 200px;
+    pointer-events: auto;
+  }
+
+  .legend-panel h3 {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: #8a94a6;
+    margin-bottom: 10px;
+  }
+
+  .legend-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 6px;
+    font-size: 11px;
+    color: #c5cbd6;
+  }
+
+  .legend-swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    margin-right: 8px;
+    flex-shrink: 0;
+  }
+
+  .legend-divider {
+    border: none;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    margin: 10px 0;
+  }
+
+  .legend-dc {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 8px;
+    flex-shrink: 0;
+    position: relative;
+  }
+
+  .legend-dc.active {
+    background: #4cff91;
+    box-shadow: 0 0 6px 2px rgba(76,255,145,0.5);
+  }
+  .legend-dc.construction {
+    background: #ffd94c;
+    box-shadow: 0 0 6px 2px rgba(255,217,76,0.5);
+  }
+  .legend-dc.planned {
+    background: #4cc3ff;
+    box-shadow: 0 0 6px 2px rgba(76,195,255,0.5);
+  }
+
+  /* Stats panel */
+  .stats-panel {
+    position: absolute;
+    bottom: 24px;
+    right: 16px;
+    z-index: 1000;
+    background: rgba(10, 14, 23, 0.92);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 14px 16px;
+    min-width: 180px;
+  }
+
+  .stats-panel h3 {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: #8a94a6;
+    margin-bottom: 10px;
+  }
+
+  .stat-item {
+    margin-bottom: 8px;
+  }
+
+  .stat-value {
+    font-size: 22px;
+    font-weight: 700;
+    color: #fff;
+    line-height: 1;
+  }
+
+  .stat-label {
+    font-size: 10px;
+    color: #8a94a6;
+    margin-top: 2px;
+  }
+
+  /* Sources */
+  .sources {
+    position: absolute;
+    bottom: 6px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    font-size: 9px;
+    color: #4a5568;
+    text-align: center;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+
+  /* Firefly marker animations */
+  @keyframes firefly-pulse-green {
+    0%, 100% { box-shadow: 0 0 4px 1px rgba(76,255,145,0.4), 0 0 12px 4px rgba(76,255,145,0.15); }
+    50% { box-shadow: 0 0 6px 2px rgba(76,255,145,0.6), 0 0 18px 6px rgba(76,255,145,0.25); }
+  }
+  @keyframes firefly-pulse-yellow {
+    0%, 100% { box-shadow: 0 0 4px 1px rgba(255,217,76,0.4), 0 0 12px 4px rgba(255,217,76,0.15); }
+    50% { box-shadow: 0 0 6px 2px rgba(255,217,76,0.6), 0 0 18px 6px rgba(255,217,76,0.25); }
+  }
+  @keyframes firefly-pulse-blue {
+    0%, 100% { box-shadow: 0 0 4px 1px rgba(76,195,255,0.4), 0 0 12px 4px rgba(76,195,255,0.15); }
+    50% { box-shadow: 0 0 6px 2px rgba(76,195,255,0.6), 0 0 18px 6px rgba(76,195,255,0.25); }
+  }
+
+  .firefly-marker {
+    border-radius: 50%;
+    border: 1.5px solid rgba(255,255,255,0.6);
+    cursor: pointer;
+    transition: transform 0.2s;
+  }
+  .firefly-marker:hover {
+    transform: scale(1.5);
+  }
+
+  .firefly-green {
+    background: #4cff91;
+    animation: firefly-pulse-green 3s ease-in-out infinite;
+  }
+  .firefly-yellow {
+    background: #ffd94c;
+    animation: firefly-pulse-yellow 3s ease-in-out infinite;
+  }
+  .firefly-blue {
+    background: #4cc3ff;
+    animation: firefly-pulse-blue 3s ease-in-out infinite;
+  }
+
+  /* Popup styling */
+  .leaflet-popup-content-wrapper {
+    background: rgba(16, 20, 32, 0.95) !important;
+    color: #e8e8e8 !important;
+    border-radius: 8px !important;
+    border: 1px solid rgba(255,255,255,0.1) !important;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5) !important;
+  }
+  .leaflet-popup-tip {
+    background: rgba(16, 20, 32, 0.95) !important;
+    border: 1px solid rgba(255,255,255,0.1) !important;
+  }
+  .leaflet-popup-content {
+    font-family: 'Inter', sans-serif !important;
+    font-size: 12px !important;
+    line-height: 1.5 !important;
+    margin: 10px 14px !important;
+  }
+  .leaflet-popup-content strong {
+    color: #fff;
+    font-weight: 600;
+  }
+  .popup-operator {
+    color: #8a94a6;
+    font-size: 10px;
+  }
+  .popup-status {
+    display: inline-block;
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    margin-top: 4px;
+  }
+  .popup-status.active { background: rgba(76,255,145,0.15); color: #4cff91; }
+  .popup-status.construction { background: rgba(255,217,76,0.15); color: #ffd94c; }
+  .popup-status.planned { background: rgba(76,195,255,0.15); color: #4cc3ff; }
+
+  .popup-detail {
+    font-size: 11px;
+    color: #8a94a6;
+    margin-top: 4px;
+  }
+
+  /* Water stress polygon popups */
+  .basin-popup {
+    font-family: 'Inter', sans-serif;
+  }
+  .basin-popup .stress-badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-top: 4px;
+  }
+
+  /* Leaflet controls dark theme */
+  .leaflet-control-zoom a {
+    background: rgba(16, 20, 32, 0.9) !important;
+    color: #c5cbd6 !important;
+    border-color: rgba(255,255,255,0.1) !important;
+  }
+  .leaflet-control-zoom a:hover {
+    background: rgba(30, 38, 55, 0.95) !important;
+  }
+  .leaflet-control-attribution {
+    display: none !important;
+  }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <h1>Saudi Arabia's AI Boom Has a <span>Water Problem</span></h1>
+  <p>Active, under-construction, and planned data centers overlaid on baseline water stress from the WRI Aqueduct 4.0 Water Risk Atlas. Saudi Arabia ranks among the world's most water-stressed nations, yet is building one of the largest data center corridors in the Middle East.</p>
+</div>
+
+<div id="map"></div>
+
+<div class="legend-panel">
+  <h3>Water Stress (Baseline)</h3>
+  <div class="legend-row"><div class="legend-swatch" style="background:#b71c1c;"></div>Extremely High (&gt;80%)</div>
+  <div class="legend-row"><div class="legend-swatch" style="background:#e65100;"></div>High (40–80%)</div>
+  <div class="legend-row"><div class="legend-swatch" style="background:#ef9a4e;"></div>Medium–High (20–40%)</div>
+  <div class="legend-row"><div class="legend-swatch" style="background:#fdd835;"></div>Low–Medium (10–20%)</div>
+  <div class="legend-row"><div class="legend-swatch" style="background:#a5d6a7;"></div>Low (&lt;10%)</div>
+  <div class="legend-row"><div class="legend-swatch" style="background:#546e7a; opacity:0.5;"></div>Arid / Low Water Use</div>
+  <hr class="legend-divider">
+  <h3>Data Centers</h3>
+  <div class="legend-row"><div class="legend-dc active"></div>Active / Operational</div>
+  <div class="legend-row"><div class="legend-dc construction"></div>Under Construction</div>
+  <div class="legend-row"><div class="legend-dc planned"></div>Planned / Announced</div>
+</div>
+
+<div class="stats-panel">
+  <h3>Key Figures</h3>
+  <div class="stat-item">
+    <div class="stat-value">76+</div>
+    <div class="stat-label">Data center facilities</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-value">~350 MW</div>
+    <div class="stat-label">Existing capacity</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-value">~2.7 GW</div>
+    <div class="stat-label">Planned capacity</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-value">15B L</div>
+    <div class="stat-label">Water used (2024)</div>
+  </div>
+</div>
+
+<div class="sources">
+  Water Stress: WRI Aqueduct 4.0 (CC BY 4.0) · Data Centers: BlackRidge Research, Arizton, datacentermap.com · Map: Ali Abutaleb 2026
+</div>
+
+<script>
+// ─── Initialize Map ───
+const map = L.map('map', {
+  center: [23.5, 44.5],
+  zoom: 6,
+  minZoom: 5,
+  maxZoom: 12,
+  zoomControl: true
+});
+
+// Dark basemap
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  attribution: '&copy; CARTO &copy; OSM contributors',
+  subdomains: 'abcd',
+  maxZoom: 19
+}).addTo(map);
+
+// ─── Water Stress Regions (simplified sub-basins for Saudi Arabia) ───
+// Based on WRI Aqueduct 4.0 baseline water stress categories
+// Category: 4 = Extremely High (>80%), 3 = High (40-80%), -1 = Arid
+const waterStressRegions = [
+  {
+    name: "Riyadh Basin",
+    category: 4, label: "Extremely High",
+    coords: [[26.0,45.5],[25.5,47.5],[24.5,48.0],[23.5,47.5],[22.5,46.5],[22.0,45.0],[22.5,44.0],[24.0,43.5],[25.5,44.0],[26.0,45.5]]
+  },
+  {
+    name: "Eastern Province Coast",
+    category: 4, label: "Extremely High",
+    coords: [[28.5,48.5],[27.5,49.5],[26.5,50.0],[25.5,50.5],[24.5,51.0],[23.5,50.8],[22.5,50.5],[22.5,49.0],[23.5,47.5],[24.5,48.0],[25.5,47.5],[26.0,47.0],[27.0,48.0],[28.5,48.5]]
+  },
+  {
+    name: "Rub' al-Khali (Empty Quarter)",
+    category: -1, label: "Arid / Low Water Use",
+    coords: [[22.5,46.5],[22.5,49.0],[22.5,50.5],[21.5,50.5],[20.0,51.0],[18.5,49.5],[17.5,47.5],[18.0,46.0],[19.5,45.0],[21.0,45.5],[22.0,45.0],[22.5,46.5]]
+  },
+  {
+    name: "Northern Region (Tabuk-Hail)",
+    category: 4, label: "Extremely High",
+    coords: [[31.5,36.5],[31.0,39.0],[30.0,40.5],[29.0,41.5],[28.0,43.0],[27.5,45.0],[28.5,48.5],[29.5,47.5],[30.5,43.0],[31.5,40.0],[32.0,38.0],[31.5,36.5]]
+  },
+  {
+    name: "NEOM / Tabuk Coast",
+    category: 4, label: "Extremely High",
+    coords: [[29.5,34.5],[29.0,35.5],[28.5,36.0],[27.5,36.5],[26.5,36.5],[26.0,37.0],[27.0,38.5],[28.5,38.0],[29.5,37.0],[30.5,36.0],[31.5,36.5],[29.5,34.5]]
+  },
+  {
+    name: "Hejaz (Madinah-Makkah)",
+    category: 4, label: "Extremely High",
+    coords: [[26.5,36.5],[26.0,37.0],[25.5,38.5],[25.0,39.5],[24.0,40.0],[23.0,40.5],[22.0,40.5],[21.5,40.0],[21.0,39.5],[21.5,39.0],[22.0,39.0],[22.5,39.5],[24.0,39.0],[25.0,38.0],[25.5,37.5],[26.0,37.0],[26.5,36.5]]
+  },
+  {
+    name: "Jeddah Coast",
+    category: 4, label: "Extremely High",
+    coords: [[22.0,39.0],[21.5,39.0],[21.0,39.5],[20.5,40.0],[20.0,40.5],[19.5,41.0],[20.0,41.5],[21.0,40.5],[22.0,40.5],[22.5,39.5],[22.0,39.0]]
+  },
+  {
+    name: "Asir Highlands",
+    category: 3, label: "High",
+    coords: [[20.0,41.5],[19.5,41.0],[19.0,41.5],[18.5,42.0],[18.0,42.5],[17.5,42.5],[17.0,43.0],[17.5,43.5],[18.0,43.5],[18.5,43.0],[19.5,42.0],[20.0,41.5]]
+  },
+  {
+    name: "Jazan Region",
+    category: 3, label: "High",
+    coords: [[17.5,42.5],[17.0,43.0],[16.5,43.0],[16.5,42.5],[17.0,42.0],[17.5,42.0],[17.5,42.5]]
+  },
+  {
+    name: "Najran / Southern Interior",
+    category: 4, label: "Extremely High",
+    coords: [[18.0,43.5],[17.5,43.5],[17.0,44.5],[17.5,45.5],[17.5,47.5],[18.5,46.5],[19.5,45.0],[20.0,44.0],[19.5,43.0],[18.5,43.0],[18.0,43.5]]
+  },
+  {
+    name: "Al Qassim Basin",
+    category: 4, label: "Extremely High",
+    coords: [[27.5,43.0],[27.0,44.0],[26.5,44.5],[26.0,45.5],[27.5,45.0],[28.0,44.5],[28.0,43.5],[27.5,43.0]]
+  }
+];
+
+function getStressColor(cat) {
+  switch (cat) {
+    case 4: return '#b71c1c';
+    case 3: return '#e65100';
+    case 2: return '#ef9a4e';
+    case 1: return '#fdd835';
+    case 0: return '#a5d6a7';
+    case -1: return '#546e7a';
+    default: return '#37474f';
+  }
+}
+
+function getStressOpacity(cat) {
+  return cat === -1 ? 0.2 : 0.35;
+}
+
+// Draw water stress polygons
+waterStressRegions.forEach(region => {
+  const latlngs = region.coords.map(c => [c[0], c[1]]);
+  const color = getStressColor(region.category);
+  L.polygon(latlngs, {
+    fillColor: color,
+    fillOpacity: getStressOpacity(region.category),
+    color: color,
+    weight: 1,
+    opacity: 0.4
+  }).addTo(map).bindPopup(
+    `<div class="basin-popup">
+      <strong>${region.name}</strong><br>
+      <span class="stress-badge" style="background:${color}33; color:${color};">${region.label}</span>
+      <div class="popup-detail">Baseline water stress (1979–2019)<br>Source: WRI Aqueduct 4.0</div>
+    </div>`
+  );
+});
+
+// ─── Data Centers ───
+const dataCenters = [
+  // ── RIYADH (largest cluster) ──
+  { lat: 24.7136, lng: 46.6753, name: "Center3 (stc) – Riyadh Campus", operator: "Saudi Telecom Company (stc)", status: "active", capacity: "40 MW", detail: "Multiple Tier III/IV facilities" },
+  { lat: 24.6900, lng: 46.7200, name: "SDAIA Hexagon Data Center", operator: "SDAIA / Government", status: "active", capacity: "480 MW", detail: "30M sq ft, Tier IV, Saudi Vision 2030" },
+  { lat: 24.7400, lng: 46.6300, name: "Mobily – Khurais DC", operator: "Mobily", status: "active", capacity: "25 MW", detail: "Tier III certified" },
+  { lat: 24.7800, lng: 46.7500, name: "Gulf Data Hub – Riyadh", operator: "Gulf Data Hub", status: "active", capacity: "20 MW", detail: "Large-scale colocation" },
+  { lat: 24.6500, lng: 46.7100, name: "Oracle Cloud – Riyadh Region", operator: "Oracle", status: "active", capacity: "—", detail: "Cloud region launched 2024" },
+  { lat: 24.6700, lng: 46.7600, name: "Alibaba Cloud / stc – Riyadh", operator: "Alibaba Cloud / stc", status: "active", capacity: "—", detail: "Two DC partnership since 2022" },
+  { lat: 24.7200, lng: 46.8100, name: "NourNet – Riyadh DC", operator: "NourNet", status: "active", capacity: "12 MW", detail: "Tier III colocation" },
+  { lat: 24.6300, lng: 46.6500, name: "Dawiyat Hittin DC", operator: "Dawiyat", status: "active", capacity: "8 MW", detail: "Tier III certified" },
+  { lat: 24.7600, lng: 46.5900, name: "Zain Saudi Arabia DC", operator: "Zain / Ericsson", status: "active", capacity: "15 MW", detail: "Next-gen hyperscale" },
+  { lat: 24.6000, lng: 46.8500, name: "Sahayeb DC – Riyadh", operator: "Al Moammar Information Systems", status: "active", capacity: "30 MW", detail: "National network hub" },
+  { lat: 24.5500, lng: 46.9000, name: "Desert Dragon Phase 1 – Riyadh", operator: "ICS Arabia / CMI / LMT", status: "construction", capacity: "65 MW", detail: "Tier III, operational Mar 2026" },
+  { lat: 24.8000, lng: 46.5000, name: "DataVolt – Riyadh Campus", operator: "DataVolt", status: "construction", capacity: "100+ MW", detail: "$5B investment, AI-ready" },
+  { lat: 24.7000, lng: 47.0000, name: "AWS Saudi Arabia Region", operator: "Amazon Web Services", status: "planned", capacity: "~100 MW", detail: "$5.3B investment, launch 2026" },
+  { lat: 24.6800, lng: 46.5500, name: "Microsoft Azure – Eastern Province", operator: "Microsoft", status: "planned", capacity: "—", detail: "$60B global AI investment" },
+  { lat: 24.8300, lng: 46.7800, name: "HUMAIN / AirTrunk – Riyadh", operator: "HUMAIN (PIF) / AirTrunk", status: "planned", capacity: "200+ MW", detail: "Hyperscale AI campus" },
+  { lat: 24.5800, lng: 46.7400, name: "Tamasuk / MCIT Data Center", operator: "Tamasuk / MCIT", status: "planned", capacity: "50 MW", detail: "Government partnership" },
+  { lat: 24.7500, lng: 46.8500, name: "Khazna Data Centers – Riyadh", operator: "Khazna", status: "planned", capacity: "30 MW", detail: "Regional expansion" },
+
+  // ── DAMMAM / EASTERN PROVINCE ──
+  { lat: 26.4207, lng: 50.0888, name: "Center3 – Dammam Campus", operator: "Saudi Telecom Company (stc)", status: "active", capacity: "50 MW", detail: "Largest existing operator" },
+  { lat: 26.3500, lng: 50.1500, name: "DAMAC Digital – Dammam", operator: "DAMAC Digital", status: "active", capacity: "30 MW", detail: "Multi-phase deployment" },
+  { lat: 26.3800, lng: 50.0500, name: "Mobily – Dammam DC", operator: "Mobily", status: "active", capacity: "35 MW", detail: "Major Eastern Province hub" },
+  { lat: 26.4500, lng: 50.1000, name: "Sahayeb DC – Dammam", operator: "Al Moammar Information Systems", status: "active", capacity: "25 MW", detail: "SPARK proximity" },
+  { lat: 26.2800, lng: 50.2200, name: "SAP Cloud – Dammam Region", operator: "SAP", status: "active", capacity: "—", detail: "Cloud computing DC" },
+  { lat: 26.3200, lng: 50.0200, name: "Google Cloud – Dammam Region", operator: "Google Cloud", status: "planned", capacity: "~80 MW", detail: "Middle East expansion" },
+  { lat: 26.5000, lng: 50.1200, name: "Saudi Aramco DC Complex", operator: "Saudi Aramco", status: "active", capacity: "~60 MW", detail: "Private, energy sector" },
+  { lat: 26.2200, lng: 50.1800, name: "Desert Dragon Phase 3 – Dammam", operator: "ICS Arabia / CMI", status: "planned", capacity: "72 MW", detail: "Construction Sep 2025" },
+
+  // ── AL KHOBAR ──
+  { lat: 26.2800, lng: 50.2100, name: "Detecon Al Saudia – Al Khobar", operator: "Detecon Al Saudia", status: "active", capacity: "10 MW", detail: "TIA-942 certified" },
+
+  // ── JEDDAH ──
+  { lat: 21.5433, lng: 39.1728, name: "Center3 – Jeddah Campus", operator: "Saudi Telecom Company (stc)", status: "active", capacity: "20 MW", detail: "Tier III facility" },
+  { lat: 21.4900, lng: 39.2100, name: "Oracle Cloud – Jeddah Region", operator: "Oracle", status: "active", capacity: "—", detail: "First KSA cloud region (2020)" },
+  { lat: 21.5200, lng: 39.1500, name: "Mobily – Jeddah DC", operator: "Mobily", status: "active", capacity: "15 MW", detail: "Western region hub" },
+  { lat: 21.5800, lng: 39.1200, name: "Desert Dragon Phase 2 – Jeddah", operator: "ICS Arabia / CMI / LMT", status: "construction", capacity: "50 MW", detail: "Completion late 2026" },
+  { lat: 21.5600, lng: 39.2300, name: "Equinix – Jeddah Hyperscale", operator: "Equinix", status: "planned", capacity: "100 MW", detail: "$1B investment announced Feb 2025" },
+  { lat: 21.4700, lng: 39.1800, name: "NourNet – Jeddah DC", operator: "NourNet", status: "active", capacity: "8 MW", detail: "Colocation services" },
+  { lat: 21.6000, lng: 39.1000, name: "Ezditek DC – Jeddah", operator: "Ezditek", status: "active", capacity: "5 MW", detail: "Managed hosting" },
+
+  // ── NEOM (Oxagon) ──
+  { lat: 27.9500, lng: 35.5500, name: "DataVolt – Oxagon NEOM", operator: "DataVolt / NEOM", status: "planned", capacity: "500+ MW", detail: "Landmark sustainable DC, signed Jan 2025" },
+  { lat: 28.0000, lng: 35.4000, name: "TONOMUS ZeroPoint DC – NEOM", operator: "TONOMUS (NEOM)", status: "planned", capacity: "200+ MW", detail: "Zero-carbon data center" },
+  { lat: 27.8500, lng: 35.6500, name: "Pure Data Centres / Dune Vaults – NEOM", operator: "Pure Data Centres", status: "planned", capacity: "100 MW", detail: "Underground sustainable DC" },
+  { lat: 28.0500, lng: 35.5000, name: "Desert Dragon Phase 4 – NEOM", operator: "ICS Arabia", status: "planned", capacity: "72 MW", detail: "Phase 2028-2029" },
+
+  // ── MEDINA ──
+  { lat: 24.4672, lng: 39.6024, name: "Center3 – Medina DC", operator: "Saudi Telecom Company (stc)", status: "active", capacity: "8 MW", detail: "Regional hub" },
+  { lat: 24.5000, lng: 39.5500, name: "Mobily – Medina DC", operator: "Mobily", status: "active", capacity: "5 MW", detail: "Colocation" },
+
+  // ── AL QASSIM ──
+  { lat: 26.3260, lng: 43.9750, name: "Center3 – Al Qassim DC", operator: "Saudi Telecom Company (stc)", status: "active", capacity: "5 MW", detail: "Central region coverage" },
+
+  // ── AL AHSA ──
+  { lat: 25.3500, lng: 49.5800, name: "Detecon Al Saudia – Al Ahsa", operator: "Detecon Al Saudia", status: "active", capacity: "5 MW", detail: "Eastern region" },
+
+  // ── TABUK ──
+  { lat: 28.3838, lng: 36.5650, name: "Quantum Switch – Tabuk Region", operator: "Quantum Switch", status: "planned", capacity: "50 MW", detail: "Northern expansion" },
+
+  // ── xAI ──
+  { lat: 24.6200, lng: 46.9500, name: "xAI Data Center – Riyadh", operator: "xAI", status: "planned", capacity: "—", detail: "AI compute infrastructure" },
+];
+
+// Create firefly markers
+function createFireflyIcon(status) {
+  const size = status === 'active' ? 10 : (status === 'construction' ? 9 : 8);
+  const colorClass = status === 'active' ? 'firefly-green' : (status === 'construction' ? 'firefly-yellow' : 'firefly-blue');
+  const delay = Math.random() * 3;
+  return L.divIcon({
+    className: '',
+    html: `<div class="firefly-marker ${colorClass}" style="width:${size}px; height:${size}px; animation-delay:${delay}s;"></div>`,
+    iconSize: [size, size],
+    iconAnchor: [size/2, size/2]
+  });
+}
+
+// Add data center markers
+dataCenters.forEach(dc => {
+  const icon = createFireflyIcon(dc.status);
+  const statusLabel = dc.status === 'active' ? 'Operational' : (dc.status === 'construction' ? 'Under Construction' : 'Planned');
+  const statusClass = dc.status;
+
+  const marker = L.marker([dc.lat, dc.lng], { icon })
+    .addTo(map)
+    .bindPopup(
+      `<strong>${dc.name}</strong><br>
+       <span class="popup-operator">${dc.operator}</span><br>
+       <span class="popup-status ${statusClass}">${statusLabel}</span>
+       <div class="popup-detail">
+         ${dc.capacity !== '—' ? `Capacity: ${dc.capacity}<br>` : ''}
+         ${dc.detail}
+       </div>`
+    );
+});
+
+// ─── Saudi Border Outline (simplified) ───
+const saudiBorder = [
+  [32.15, 39.20], [31.50, 36.50], [29.50, 34.90], [28.50, 34.60],
+  [27.95, 35.15], [27.50, 36.00], [26.50, 36.50], [25.50, 37.50],
+  [24.50, 37.50], [23.50, 38.20], [22.50, 39.00], [21.50, 39.00],
+  [20.50, 39.80], [19.50, 41.00], [18.50, 41.80], [17.50, 42.50],
+  [16.80, 42.80], [16.50, 43.20], [17.00, 43.50], [17.50, 44.00],
+  [17.80, 45.00], [18.00, 46.50], [18.50, 48.50], [19.50, 49.50],
+  [20.50, 50.50], [22.00, 50.80], [23.50, 51.00], [24.50, 51.50],
+  [25.50, 50.80], [26.00, 50.40], [26.80, 50.10], [27.50, 49.50],
+  [28.50, 48.50], [29.00, 47.50], [29.50, 47.00], [30.00, 45.00],
+  [30.50, 43.50], [31.00, 41.50], [31.50, 39.50], [32.15, 39.20]
+];
+
+L.polyline(saudiBorder, {
+  color: '#ffffff',
+  weight: 1.5,
+  opacity: 0.25,
+  dashArray: '6, 4'
+}).addTo(map);
+
+// ─── City Labels ───
+const cities = [
+  { lat: 24.7136, lng: 46.6753, name: "Riyadh" },
+  { lat: 21.5433, lng: 39.1728, name: "Jeddah" },
+  { lat: 26.4207, lng: 50.0888, name: "Dammam" },
+  { lat: 24.4672, lng: 39.6024, name: "Medina" },
+  { lat: 28.00, lng: 35.50, name: "NEOM" },
+  { lat: 26.3260, lng: 43.9750, name: "Al Qassim" },
+  { lat: 28.3838, lng: 36.5650, name: "Tabuk" },
+  { lat: 21.2854, lng: 39.8672, name: "Makkah" },
+  { lat: 17.00, lng: 42.70, name: "Jazan" }
+];
+
+cities.forEach(city => {
+  L.marker([city.lat, city.lng], {
+    icon: L.divIcon({
+      className: '',
+      html: `<div style="
+        color: rgba(255,255,255,0.55);
+        font-family: Inter, sans-serif;
+        font-size: 10px;
+        font-weight: 500;
+        letter-spacing: 0.5px;
+        text-shadow: 0 0 6px rgba(0,0,0,0.8), 0 0 12px rgba(0,0,0,0.5);
+        white-space: nowrap;
+        pointer-events: none;
+        transform: translate(8px, -6px);
+      ">${city.name}</div>`,
+      iconSize: [0, 0]
+    }),
+    interactive: false
+  }).addTo(map);
+});
+
+// ─── Desalination Plants (context layer) ───
+const desalPlants = [
+  { lat: 26.55, lng: 49.98, name: "Ras Al-Khair Desal.", detail: "World's largest, 1.025M m³/day" },
+  { lat: 20.20, lng: 40.95, name: "Shuaibah Desal.", detail: "Major Red Sea coast plant" },
+  { lat: 22.80, lng: 38.95, name: "Rabigh Desal.", detail: "Western coastal supply" },
+  { lat: 26.30, lng: 50.25, name: "Jubail Desal.", detail: "Eastern Province supply" },
+  { lat: 28.10, lng: 35.20, name: "NEOM Green Hydrogen", detail: "Planned: solar-powered desal." }
+];
+
+desalPlants.forEach(plant => {
+  L.circleMarker([plant.lat, plant.lng], {
+    radius: 4,
+    color: '#26c6da',
+    fillColor: '#26c6da',
+    fillOpacity: 0.3,
+    weight: 1,
+    opacity: 0.5
+  }).addTo(map).bindPopup(
+    `<strong>💧 ${plant.name}</strong><br>
+     <div class="popup-detail">${plant.detail}<br>Desalination is critical for data center cooling in Saudi Arabia</div>`
+  );
+});
+</script>
+</body>
+</html>
