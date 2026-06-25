@@ -6,7 +6,6 @@
 <title>Saudi Arabia: Data Centers vs. Water Stress</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/esri-leaflet/3.0.12/esri-leaflet.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -178,46 +177,72 @@ function getStressLabel(cat) {
   }
 }
 
-// Load real Aqueduct 4.0 sub-basin polygons from Esri Living Atlas
-const aqueductLayer = L.esri.featureLayer({
-  url: 'https://services.arcgis.com/P3ePLMYs2RVChkJx/ArcGIS/rest/services/aqueduct_water_risk/FeatureServer/0',
-  where: "1=1",
-  // Spatial filter: Saudi Arabia bounding box
-  // We use the map bounds to only load features in view
-  fields: ['bws_cat', 'bws_label', 'bws_raw', 'name_0', 'name_1', 'aq30_id', 'string_id'],
-  style: function(feature) {
-    var cat = feature.properties.bws_cat;
-    var color = getStressColor(cat);
-    return {
-      fillColor: color,
-      fillOpacity: cat === -1 ? 0.4 : 0.65,
-      color: '#333333',
-      weight: 0.5,
-      opacity: 0.4
-    };
-  },
-  onEachFeature: function(feature, layer) {
-    var p = feature.properties;
-    var cat = p.bws_cat;
-    var color = getStressColor(cat);
-    var label = p.bws_label || getStressLabel(cat);
-    var rawVal = p.bws_raw ? (p.bws_raw * 100).toFixed(1) + '%' : 'N/A';
-    layer.bindPopup(
-      '<strong>' + (p.name_1 || 'Sub-basin') + '</strong><br>' +
-      '<span style="display:inline-block;font-size:10px;font-weight:600;padding:2px 8px;border-radius:4px;margin-top:4px;background:' + color + '33;color:' + color + ';">' + label + '</span>' +
-      '<div class="popup-detail">Water withdrawal/supply ratio: ' + rawVal + '<br>Source: WRI Aqueduct 4.0 Baseline</div>'
-    );
+// Load real Aqueduct 4.0 sub-basin polygons via direct REST API query
+var baseUrl = 'https://services.arcgis.com/P3ePLMYs2RVChkJx/ArcGIS/rest/services/aqueduct_water_risk/FeatureServer/0/query';
+
+async function loadAqueductData() {
+  var loadingText = document.getElementById('loading-text');
+  try {
+    // Query with Saudi Arabia bounding box (with buffer for border basins)
+    var params = new URLSearchParams({
+      where: '1=1',
+      geometry: JSON.stringify({xmin:33,ymin:15,xmax:57,ymax:33,spatialReference:{wkid:4326}}),
+      geometryType: 'esriGeometryEnvelope',
+      spatialRel: 'esriSpatialRelIntersects',
+      outFields: 'bws_cat,bws_label,bws_raw,name_0,name_1',
+      returnGeometry: true,
+      outSR: '4326',
+      f: 'geojson',
+      resultRecordCount: 2000
+    });
+
+    loadingText.textContent = 'Fetching WRI Aqueduct 4.0 sub-basins...';
+    var response = await fetch(baseUrl + '?' + params.toString());
+    
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    
+    var data = await response.json();
+    loadingText.textContent = 'Rendering ' + (data.features ? data.features.length : 0) + ' sub-basins...';
+
+    if (data.features && data.features.length > 0) {
+      L.geoJSON(data, {
+        style: function(feature) {
+          var cat = feature.properties.bws_cat;
+          var color = getStressColor(cat);
+          return {
+            fillColor: color,
+            fillOpacity: cat === -1 ? 0.4 : 0.65,
+            color: '#333333',
+            weight: 0.5,
+            opacity: 0.4
+          };
+        },
+        onEachFeature: function(feature, layer) {
+          var p = feature.properties;
+          var cat = p.bws_cat;
+          var color = getStressColor(cat);
+          var label = p.bws_label || getStressLabel(cat);
+          var rawVal = p.bws_raw ? (p.bws_raw * 100).toFixed(1) + '%' : 'N/A';
+          layer.bindPopup(
+            '<strong>' + (p.name_1 || p.name_0 || 'Sub-basin') + '</strong><br>' +
+            '<span style="display:inline-block;font-size:10px;font-weight:600;padding:2px 8px;border-radius:4px;margin-top:4px;background:' + color + '33;color:' + color + ';">' + label + '</span>' +
+            '<div class="popup-detail">Water withdrawal/supply ratio: ' + rawVal + '<br>Source: WRI Aqueduct 4.0 Baseline</div>'
+          );
+        }
+      }).addTo(map);
+    }
+    
+    document.getElementById('loading-overlay').classList.add('hidden');
+  } catch(err) {
+    console.error('Aqueduct load error:', err);
+    loadingText.textContent = 'Water stress layer unavailable – showing data centers only';
+    setTimeout(function() {
+      document.getElementById('loading-overlay').classList.add('hidden');
+    }, 2000);
   }
-});
+}
 
-aqueductLayer.addTo(map);
-
-// Hide loading overlay when features load
-aqueductLayer.on('load', function() {
-  document.getElementById('loading-overlay').classList.add('hidden');
-});
-
-// Fallback: hide after 10 seconds regardless
+loadAqueductData();
 setTimeout(function() {
   document.getElementById('loading-overlay').classList.add('hidden');
 }, 10000);
